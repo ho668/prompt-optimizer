@@ -1,32 +1,25 @@
-name: Sync Upstream Release
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '*/30 * * * *'
+name: Debug Release Sync
+on: workflow_dispatch
 
 jobs:
-  sync_release:
+  debug:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_MIRROR_PAT }}
+      SOURCE_REPO: "linshenkx/prompt-optimizer，user/repo"
+      TAG: "v2.13.0"
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Sync releases
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_MIRROR_PAT }}
-          SOURCE_REPO: "linshenkx/prompt-optimizer"
-          TARGET_REPO: ${{ github.repository }}
+      - name: ① 测试Token登录
         run: |
           gh auth login --with-token <<< "$GH_TOKEN"
-          gh release list -R "$SOURCE_REPO" --json tagName,name,body --jq '.[] | .tagName + "|" + (.name // "") + "|" + (.body // "")' | while IFS='|' read -r tag title notes; do
-            echo "===== 正在处理版本：$tag ====="
-            if gh release view "$tag" -R "$TARGET_REPO" >/dev/null 2>&1; then
-              echo "✅ 该release已存在，跳过"
-              continue
-            fi
-            mkdir -p ./tmp/"$tag"
-            cd ./tmp/"$tag"
-            gh release download "$tag" -R "$SOURCE_REPO"
-            gh release create "$tag" ./* -R "$TARGET_REPO" --title "$title" --notes "$notes"
-            cd ../../
-          done
+          echo "✅ Token登录完成"
+      - name: ② 检查上游release是否存在
+        run: gh release view "$TAG" -R "$SOURCE_REPO"
+      - name: ③ 检查当前仓库有没有这个tag
+        run: |
+          if git ls-remote --tags ${{ github.repository }} | grep "$TAG"; then
+            echo "✅ 当前仓库存在tag $TAG"
+          else
+            echo "❌ 当前仓库不存在tag $TAG"
+            exit 1
+          fi
