@@ -8,35 +8,25 @@ jobs:
   sync_release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install GitHub CLI
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install -g @githubcli/cli
 
       - name: Sync releases
         env:
           GH_TOKEN: ${{ secrets.RELEASE_MIRROR_PAT }}
-          SOURCE_REPO: "https://github.com/linshenkx/prompt-optimizer"
+          SOURCE_REPO: "linshenkx/prompt-optimizer"
           TARGET_REPO: ${{ github.repository }}
         run: |
           gh auth login --with-token <<< "$GH_TOKEN"
-          # 获取上游所有release
-          gh release list -R $SOURCE_REPO --json tagName,name,body --jq '.[] | .tagName + "|" + (.name // "") + "|" + (.body // "")' | while IFS='|' read -r tag title notes; do
-            echo "===== 处理 $tag ====="
-            # 如果目标仓库已经存在这个release，跳过
-            if gh release view "$tag" -R $TARGET_REPO >/dev/null 2>&1; then
-              echo "Release $tag 已存在，跳过"
+          gh release list -R "$SOURCE_REPO" --json tagName,name,body --jq '.[] | .tagName + "|" + (.name // "") + "|" + (.body // "")' | while IFS='|' read -r tag title notes; do
+            echo "===== 正在处理版本：$tag ====="
+            if gh release view "$tag" -R "$TARGET_REPO" >/dev/null 2>&1; then
+              echo "✅ 该release已存在，跳过"
               continue
             fi
-            # 新建目录下载资产
-            mkdir -p ./tmp/$tag
-            cd ./tmp/$tag
-            gh release download "$tag" -R $SOURCE_REPO
-            # 创建release并上传所有资产
-            gh release create "$tag" ./* -R $TARGET_REPO --title "$title" --notes "$notes"
+            mkdir -p ./tmp/"$tag"
+            cd ./tmp/"$tag"
+            gh release download "$tag" -R "$SOURCE_REPO"
+            gh release create "$tag" ./* -R "$TARGET_REPO" --title "$title" --notes "$notes"
             cd ../../
           done
