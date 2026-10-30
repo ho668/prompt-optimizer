@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.RELEASE_MIRROR_PAT }}
-      SOURCE_REPO: "linshenkx/prompt-optimizer，user/repo"
+      SOURCE_REPO: "linshenkx/prompt-optimizer"
       TAG: "v2.13.0"
     steps:
       - name: ① 测试Token登录
