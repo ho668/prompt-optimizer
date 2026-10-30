@@ -1,23 +1,42 @@
 name: Sync Upstream Release
 on:
-  # 定时检查上游有没有新release，每30分钟跑一次
+  workflow_dispatch:
   schedule:
     - cron: '*/30 * * * *'
-  # 支持手动点 Run workflow 立即同步（很方便，推荐保留）
-  workflow_dispatch:
 
 jobs:
-  sync:
+  sync_release:
     runs-on: ubuntu-latest
     steps:
-      - name: Mirror release
-        uses: yi-Xu-0100/release-mirror-action@v1.4.0
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install GitHub CLI
+        uses: actions/setup-node@v4
         with:
-          # ========== 这里改成你的信息 ==========
-          source_repo: "https://github.com/linshenkx/prompt-optimizer"
-          target_repo: "https://github.com/ho668/prompt-optimizer"
-          # 同名release文件直接覆盖
-          overwrite: true
+          node-version: 22
+      - run: npm install -g @githubcli/cli
+
+      - name: Sync releases
         env:
-          # 重点：PAT Token，下面教你怎么生成
           GH_TOKEN: ${{ secrets.RELEASE_MIRROR_PAT }}
+          SOURCE_REPO: "https://github.com/linshenkx/prompt-optimizer"
+          TARGET_REPO: ${{ github.repository }}
+        run: |
+          gh auth login --with-token <<< "$GH_TOKEN"
+          # 获取上游所有release
+          gh release list -R $SOURCE_REPO --json tagName,name,body --jq '.[] | .tagName + "|" + (.name // "") + "|" + (.body // "")' | while IFS='|' read -r tag title notes; do
+            echo "===== 处理 $tag ====="
+            # 如果目标仓库已经存在这个release，跳过
+            if gh release view "$tag" -R $TARGET_REPO >/dev/null 2>&1; then
+              echo "Release $tag 已存在，跳过"
+              continue
+            fi
+            # 新建目录下载资产
+            mkdir -p ./tmp/$tag
+            cd ./tmp/$tag
+            gh release download "$tag" -R $SOURCE_REPO
+            # 创建release并上传所有资产
+            gh release create "$tag" ./* -R $TARGET_REPO --title "$title" --notes "$notes"
+            cd ../../
+          done
